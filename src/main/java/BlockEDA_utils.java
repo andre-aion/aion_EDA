@@ -1,13 +1,28 @@
+import com.opencsv.CSVWriter;
 import org.aion.api.IAionAPI;
 import org.aion.api.type.BlockDetails;
 import org.aion.api.type.ApiMsg;
 
+import java.io.File;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+
+import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.opencsv.CSVReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import com.opencsv.bean.StatefulBeanToCsv;
+import com.opencsv.bean.StatefulBeanToCsvBuilder;
+import com.opencsv.exceptions.CsvDataTypeMismatchException;
+import com.opencsv.exceptions.CsvRequiredFieldEmptyException;
+import java.io.FileWriter;
+import java.io.IOException;
 
 
 public class BlockEDA_utils {
@@ -15,6 +30,11 @@ public class BlockEDA_utils {
     static IAionAPI api = IAionAPI.init();
     ApiMsg apiMsg;
     static final Logger logger = LoggerFactory.getLogger(BlockEDA_utils.class);
+
+    //Delimiter used in CSV file
+    private static final String COMMA_DELIMITER = ",";
+    private static final String NEW_LINE_SEPARATOR = "\n";
+
 
 
     public BlockEDA_utils() {
@@ -73,7 +93,7 @@ public class BlockEDA_utils {
         return allBlocks;
 
     }
-
+    // Get block between two dates
     // Enter dates in the format" "yyyy-MM-dd hh:mm:ss"
     public List<BlockDetails> getAllBlocksInDateRange(String startDate, String endDate) throws ParseException {
         SimpleDateFormat dateFormat = new SimpleDateFormat(
@@ -84,7 +104,8 @@ public class BlockEDA_utils {
         long SecStartTime = parsedStartTimeStamp.getTime()/1000;
         long SecEndTime = parsedEndTimeStamp.getTime()/1000;
 
-        long lastBlockNumber = this.api.getChain().blockNumber().getObject();
+        this.apiMsg.set(this.api.getChain().blockNumber());
+        long lastBlockNumber = this.apiMsg.getObject();
         long startBlockNumber = 0;
         long startBracketBlockNumber = this.findBlockByDatetimeSec(SecStartTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
         long endBracketBlockNumber = this.findBlockByDatetimeSec(SecEndTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
@@ -96,7 +117,7 @@ public class BlockEDA_utils {
     }
 
 
-    public long findBlockByDatetimeSec(long datetimeSec, long startBlockNumber, long endBlockNumber, long lastBlockNumber) {
+    private long findBlockByDatetimeSec(long datetimeSec, long startBlockNumber, long endBlockNumber, long lastBlockNumber) {
         long foundBlockNumber;
         if(startBlockNumber < 0){
             startBlockNumber = 0;
@@ -122,13 +143,11 @@ public class BlockEDA_utils {
 
             if (datetimeSec < midBlk.getTimestamp()){
                 endBlockNumber = midBlockNumber;
-                System.out.println("calling recursive bottom half");
                 return findBlockByDatetimeSec(datetimeSec, startBlockNumber, endBlockNumber, lastBlockNumber);
 
             }
             else if(datetimeSec > nextBlk.getTimestamp()){
                 startBlockNumber = midBlockNumber+1;
-                System.out.println("calling recursive top half");
                 return findBlockByDatetimeSec(datetimeSec, startBlockNumber, endBlockNumber, lastBlockNumber);
             }
             else if(datetimeSec >= midBlk.getTimestamp() && datetimeSec <= nextBlk.getTimestamp()) {
@@ -139,6 +158,43 @@ public class BlockEDA_utils {
         return -1;
     }
 
+    /* write blocks to csv */
+    private void blocks_to_csv(List<BlockDetails> blks, String filepath) throws IOException {
+
+        String csvFilename = "blockdetails.csv";
+
+        if(filepath != null && filepath.length() > 0) {
+
+            String basePath = FilenameUtils.getFullPath(filepath);
+            String fileName = FilenameUtils.getName(filepath);
+            // ensure filepath exists
+            Path basepath = Paths.get(basePath);
+            if (!Files.exists(basepath)) {
+                // write to files directory
+                basePath = "";
+            }
+            csvFilename = basePath + fileName;
+        }
+
+
+        FileWriter fileWriter = null;
+        CSVWriter writer = new CSVWriter(new FileWriter(csvFilename));
+
+        String[] header ={"number", "timestamp", "nrgConsumed", "nrgLimit", "difficulty", "minerAddress", "size", "blockTime"};
+
+        writer.writeNext(header);
+        for (BlockDetails blk : blks){
+           String[] data = {String.valueOf(blk.getNumber()), String.valueOf(blk.getTimestamp()),
+                            String.valueOf(blk.getNrgConsumed()), String.valueOf(blk.getNrgLimit()),
+                            String.valueOf(blk.getDifficulty()),  String.valueOf(blk.getMinerAddress()),
+                            String.valueOf(blk.getSize()), String.valueOf(blk.getBlockTime())};
+           writer.writeNext(data);
+        }
+        System.out.println("CSV file written");
+        writer.close();
+    }
+
+    // Uage
     public static void main(String[] args) {
 
         BlockEDA_utils blkexp = new BlockEDA_utils();
@@ -146,11 +202,12 @@ public class BlockEDA_utils {
 
         //search by date range
         try {
-            List<BlockDetails> blks = blkexp.getAllBlocksInDateRange("2018-08-01 00:00:00", "2018-09-04 00:00:00");
-            for (BlockDetails blk : blks){
-                System.out.println(blk.getNumber());
-            }
+            List<BlockDetails> blks = blkexp.getAllBlocksInDateRange("2018-07-05 00:00:00", "2018-09-12 00:00:00");
+            blkexp.blocks_to_csv(blks,"/home/andre/aion/projects/hashpower/blockdetails.csv");
+
         } catch (ParseException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
