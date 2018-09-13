@@ -164,7 +164,7 @@ public class BlockEDA_utils {
                 return findBlockByDatetimeSec(datetimeSec, startBlockNumber, endBlockNumber, lastBlockNumber);
             }
             else if(datetimeSec >= midBlk.getTimestamp() && datetimeSec <= nextBlk.getTimestamp()) {
-                return midBlockNumber;
+                return (midBlockNumber+1);
             }
 
         }
@@ -172,7 +172,7 @@ public class BlockEDA_utils {
     }
 
     /* write blocks to csv */
-    private void blocks_to_csv(List<BlockDetails> blks, String filepath) throws IOException {
+    public void blocks_to_csv(List<BlockDetails> blks, String filepath) throws IOException {
 
         String csvFilename = "blockdetails.csv";
 
