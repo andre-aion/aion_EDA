@@ -4,8 +4,11 @@ import org.aion.api.type.BlockDetails;
 import org.aion.api.type.ApiMsg;
 
 import java.io.File;
+import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -104,15 +107,25 @@ public class BlockEDA_utils {
         long SecStartTime = parsedStartTimeStamp.getTime()/1000;
         long SecEndTime = parsedEndTimeStamp.getTime()/1000;
 
-        this.apiMsg.set(this.api.getChain().blockNumber());
-        long lastBlockNumber = this.apiMsg.getObject();
-        long startBlockNumber = 0;
-        long startBracketBlockNumber = this.findBlockByDatetimeSec(SecStartTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
-        long endBracketBlockNumber = this.findBlockByDatetimeSec(SecEndTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
 
-        List<BlockDetails> blks = this.getAllBlocksInRange(startBracketBlockNumber,endBracketBlockNumber);
+        ApiMsg set = this.apiMsg.set(this.api.getChain().blockNumber());
 
-        return blks;
+        if (set.isError()) {
+            try {
+                throw new Exception("AionApi: ERR_CODE[" + this.apiMsg.getErrorCode() + "]: " + this.apiMsg.getErrString());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            long lastBlockNumber = set.getObject();
+            long startBlockNumber = 0;
+            long startBracketBlockNumber = this.findBlockByDatetimeSec(SecStartTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
+            long endBracketBlockNumber = this.findBlockByDatetimeSec(SecEndTime, startBlockNumber, lastBlockNumber, lastBlockNumber);
+            List<BlockDetails> blks = this.getAllBlocksInRange(startBracketBlockNumber,endBracketBlockNumber);
+            return blks;
+        }
+
+        return Collections.emptyList();
 
     }
 
@@ -180,15 +193,42 @@ public class BlockEDA_utils {
         FileWriter fileWriter = null;
         CSVWriter writer = new CSVWriter(new FileWriter(csvFilename));
 
-        String[] header ={"number", "timestamp", "nrgConsumed", "nrgLimit", "difficulty", "minerAddress", "size", "blockTime"};
+        //parse the datetime
+
+        String year;
+        String month;
+        String day;
+        String date;
+        String hour;
+        String minute;
+        String second;
+
+
+
+
+
+        String[] header ={"number", "timestamp",
+                "nrgConsumed", "nrgLimit", "difficulty", "minerAddress", "size", "blockTime"};
+
+
 
         writer.writeNext(header);
         for (BlockDetails blk : blks){
-           String[] data = {String.valueOf(blk.getNumber()), String.valueOf(blk.getTimestamp()),
+            Timestamp timestamp = new Timestamp((blk.getTimestamp()*1000));
+            date = timestamp.toString();
+
+            month = String.valueOf(timestamp.getMonth());
+            day = String.valueOf(timestamp.getDay());
+
+            hour = String.valueOf(timestamp.getHours());
+            minute = String.valueOf(timestamp.getMinutes());
+            second = String.valueOf(timestamp.getSeconds());
+
+            String[] data = {String.valueOf(blk.getNumber()), date,
                             String.valueOf(blk.getNrgConsumed()), String.valueOf(blk.getNrgLimit()),
                             String.valueOf(blk.getDifficulty()),  String.valueOf(blk.getMinerAddress()),
                             String.valueOf(blk.getSize()), String.valueOf(blk.getBlockTime())};
-           writer.writeNext(data);
+            writer.writeNext(data);
         }
         System.out.println("CSV file written");
         writer.close();
